@@ -1,0 +1,180 @@
+<html>
+<head>
+  <title>Evernote Export</title>
+  <basefont face="微软雅黑" size="2" />
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+  <meta name="exporter-version" content="Evernote Windows/277494; Windows/10.0.10586 (Win64);"/>
+  <style>
+    body, td {
+      font-family: 微软雅黑;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+<a name="811"/>
+
+<div>
+<span><div>Payless 论文中给出的FlowStatisticsCollectionScheduling算法如下所示。</div><div><img src="Payless Algorithm 1- Implemention and Setting of Tmin and Tmax_files/Image.png" type="image/png"/></div><div><br/></div><div><b>在代码中的实现：</b></div><div>在论文给出的源代码中的net.floodlightcontoller.netmonitor中的NETMonitor.java文件中，有FlowStatisticsCollectionScheduling算法的实现。</div><div>上述的算法伪代码与被实现的代码中相对应的部分变量表：</div><div><br clear="none"/></div><table style="-evernote-table: true; border-collapse: collapse; table-layout: fixed; margin-left: 0px;width:100%;"><tr><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; border: 1px solid #d3d3d3;width:49.92175273865415%;">伪代码</td><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; border: 1px solid #d3d3d3;width:49.92175273865415%;"><div>代码</div></td></tr><tr><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>Tmin</div></td><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>MIN_SCHEDULE_TIMEOUT</div></td></tr><tr><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>Tmax</div></td><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>MAX_SCHEDULE_TIMEOUT</div></td></tr><tr><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>active_flows</div></td><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>activeFlowTable (SortedSet&lt;FlowEntry&gt;)</div></td></tr><tr><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>schedule_table</div></td><td colspan="1" rowspan="1" style="padding: 10px; margin: 0px; width: 50%; border: 1px solid #d3d3d3;"><div>schedule (SchedulerTable)</div></td></tr></table><div><br clear="none"/></div><div>该工程使用FloodlightModuleContext模块配置参数，参数的值可以在配置文件./target/bin/floodlightdefault.properties中设置。可以配置的参数有：</div><div>ALGORITHM</div><div>MIN_SCHEDULE_TIMEOUT</div><div>MAX_SCHEDULE_TIMEOUT</div><div>MIN_SCHEDULE_BYTE_THRESHOLD</div><div>MAX_SCHEDULE_BYTE_THRESHOLD</div><div>SCHEDULE_TIMEOUT_DAMPING_FACTOR</div><div>SCHEDULE_TIMEOUT_AMPLIFY_FACTOR</div><div><br/></div><div>配置实例：</div><div><img src="Payless Algorithm 1- Implemention and Setting of Tmin and Tmax_files/Image [1].png" type="image/png"/></div><div><br/></div><div><strong>Important Implemention</strong>:</div><div>    public void updateLinkUsage(IOFSwitch sw, FlowEntry removedEntry, OFMatch match, OFMessage msg, OFType type)<br clear="none"/>
+    {<br clear="none"/>
+        long checkPointTimeStamp = System.currentTimeMillis();<br clear="none"/>
+        long timeOffset = 0;<br clear="none"/>
+        double duration = 0.0;<br clear="none"/>
+        long byteCount = 0;<br clear="none"/>
+        FlowEntry matchedFlow = null, tmpMatchFlow = null;<br clear="none"/><br clear="none"/>
+        synchronized (activeFlowTable)<br clear="none"/>
+        {<br clear="none"/>
+            for (Iterator&lt;FlowEntry&gt; it = activeFlowTable.iterator(); it.hasNext();)<br clear="none"/>
+            {<br clear="none"/>
+                FlowEntry flow = it.next();<br clear="none"/>
+                if (flow.equals(removedEntry))<br clear="none"/>
+                {<br clear="none"/>
+                    tmpMatchFlow = flow;<br clear="none"/>
+                    break;<br clear="none"/>
+                }<br clear="none"/>
+            }<br clear="none"/>
+        }<br clear="none"/><br clear="none"/><br clear="none"/>
+        checkPointTimeStamp -= timeOffset;<br clear="none"/>
+        if (type.equals(OFType.FLOW_REMOVED))<br clear="none"/>
+        {<br clear="none"/>
+            logger.debug(&quot;[FLOW_MOD] Checkpoint = &quot; + checkPointTimeStamp);<br clear="none"/>
+        }<br clear="none"/><br clear="none"/>
+        if (tmpMatchFlow != null)<br clear="none"/>
+        {<br clear="none"/><br clear="none"/>
+            logger.debug(&quot;Found a Matching Flow: &quot; + tmpMatchFlow.toString());<br clear="none"/>
+            matchedFlow = tmpMatchFlow;<br clear="none"/><br clear="none"/>
+            switch (type)<br clear="none"/>
+            {<br clear="none"/>
+                case FLOW_REMOVED:<br clear="none"/>
+                    OFFlowRemoved flRmMsg = (OFFlowRemoved) msg;<br clear="none"/>
+                    duration = flRmMsg.getDurationSeconds() + (flRmMsg.getDurationNanoseconds() / 1e9);<br clear="none"/><br clear="none"/>
+                    if (flRmMsg.getReason().equals(OFFlowRemoved.OFFlowRemovedReason.OFPRR_IDLE_TIMEOUT))<br clear="none"/>
+                    {<br clear="none"/>
+                        timeOffset = (long) flRmMsg.getIdleTimeout() * 1000;<br clear="none"/>
+                        duration -= flRmMsg.getIdleTimeout();<br clear="none"/>
+                    }<br clear="none"/>
+                    byteCount = flRmMsg.getByteCount();<br clear="none"/>
+                    matchedFlow = tmpMatchFlow.clone();<br clear="none"/>
+                    if (ALGORITHM.equals(&quot;payless&quot;))<br clear="none"/>
+                    {<br clear="none"/>
+                        //duration = tmpMatchFlow.getScheduleTimeout() / 1000.0;<br clear="none"/>
+                        duration = ((double) flRmMsg.getDurationSeconds() + (double) flRmMsg.getDurationNanoseconds() / 1e9)<br clear="none"/>
+                                - tmpMatchFlow.getDuration();<br clear="none"/><br clear="none"/>
+                        byteCount = flRmMsg.getByteCount() - matchedFlow.getMatchedByteCount();<br clear="none"/>
+                        logger.debug(&quot;Flow Removed, Matched flow bytes= &quot; + matchedFlow.getMatchedByteCount());<br clear="none"/>
+                        schedule.removeFlowEntry(tmpMatchFlow.getScheduleTimeout(), tmpMatchFlow);<br clear="none"/>
+                    }<br clear="none"/>
+                    activeFlowTable.remove(tmpMatchFlow);<br clear="none"/>
+                    printActiveFlows();<br clear="none"/>
+                    break;<br clear="none"/><br clear="none"/>
+                case STATS_REPLY:<br clear="none"/>
+                    OFStatisticsReply statReply = (OFStatisticsReply) msg;<br clear="none"/>
+                    ArrayList&lt;OFStatistics&gt; statList = (ArrayList&lt;OFStatistics&gt;) statReply.getStatistics();<br clear="none"/>
+                    logger.debug(&quot;Received Stat Reply &quot; + statList.size());<br clear="none"/>
+                    if (statList != null &amp;&amp; statList.size() &gt; 0)<br clear="none"/>
+                    {<br clear="none"/>
+                        OFFlowStatisticsReply fstatReply = (OFFlowStatisticsReply) statList.get(0);<br clear="none"/>
+                        //duration = fstatReply.getDurationSeconds() + (fstatReply.getDurationNanoseconds() / 1e9);<br clear="none"/>
+                        //duration = matchedFlow.getScheduleTimeout() / 1000.0;<br clear="none"/>
+                        duration = (double) fstatReply.getDurationSeconds() + (double) fstatReply.getDurationNanoseconds() / 1e9<br clear="none"/>
+                                - matchedFlow.getDuration();<br clear="none"/><br clear="none"/>
+                        byteCount = fstatReply.getByteCount() - matchedFlow.getMatchedByteCount();<br clear="none"/>
+                        logger.debug(&quot;Matched Flow Prev. Byte Count = &quot; + matchedFlow.getMatchedByteCount());<br clear="none"/>
+                        logger.debug(&quot;Stat reply, Del-byte = &quot; + byteCount);<br clear="none"/>
+                        if (byteCount &lt; MIN_SCHEDULE_BYTE_THRESHOLD)<br clear="none"/>
+                        {<br clear="none"/>
+                            int oldTimeout = matchedFlow.getScheduleTimeout();<br clear="none"/>
+                            int newTimeout = Math.min(matchedFlow.getScheduleTimeout() * SCHEDULE_TIMEOUT_AMPLIFY_FACTOR,<br clear="none"/>
+                                                      MAX_SCHEDULE_TIMEOUT);<br clear="none"/>
+                            matchedFlow.setScheduleTimeout(newTimeout);<br clear="none"/>
+                            schedule.updateTimeout(oldTimeout, newTimeout, matchedFlow);<br clear="none"/>
+                            if (schedule.getAction(newTimeout) == null)<br clear="none"/>
+                            {<br clear="none"/>
+                                ScheduledExecutorService ses = threadPool.getScheduledExecutor();<br clear="none"/>
+                                SingletonTask action = new SingletonTask(ses, new PollSwitchWorker(newTimeout, this));<br clear="none"/>
+                                action.reschedule(newTimeout, TimeUnit.MILLISECONDS);<br clear="none"/>
+                                schedule.addAction(newTimeout, action);<br clear="none"/>
+                            }<br clear="none"/>
+                        }<br clear="none"/>
+                        else if (byteCount &gt; MAX_SCHEDULE_BYTE_THRESHOLD)<br clear="none"/>
+                        {<br clear="none"/>
+                            int oldTimeout = matchedFlow.getScheduleTimeout();<br clear="none"/>
+                            int newTimeout = Math.max(matchedFlow.getScheduleTimeout() / SCHEDULE_TIMEOUT_DAMPING_FACTOR,<br clear="none"/>
+                                                      MIN_SCHEDULE_TIMEOUT);<br clear="none"/>
+                            matchedFlow.setScheduleTimeout(newTimeout);<br clear="none"/>
+                            schedule.updateTimeout(oldTimeout, newTimeout, matchedFlow);<br clear="none"/>
+                            if (schedule.getAction(newTimeout) == null)<br clear="none"/>
+                            {<br clear="none"/>
+                                ScheduledExecutorService ses = threadPool.getScheduledExecutor();<br clear="none"/>
+                                SingletonTask action = new SingletonTask(ses, new PollSwitchWorker(newTimeout, this));<br clear="none"/>
+                                action.reschedule(newTimeout, TimeUnit.MILLISECONDS);<br clear="none"/>
+                                schedule.addAction(newTimeout, action);<br clear="none"/>
+                            }<br clear="none"/>
+                        }<br clear="none"/>
+                        matchedFlow.setMatchedByteCount(fstatReply.getByteCount());<br clear="none"/>
+                        matchedFlow.setDuration((double) fstatReply.getDurationSeconds()<br clear="none"/>
+                                + (double) fstatReply.getDurationNanoseconds() / 1e9);<br clear="none"/>
+                    }<br clear="none"/>
+                    break;<br clear="none"/>
+            }<br clear="none"/><br clear="none"/>
+            double <span style="color: rgb(255, 0, 0);">utilization</span> = (double) byteCount / duration;<br clear="none"/>
+            logger.debug(&quot;Instant utilization = &quot; + utilization);<br clear="none"/>
+            <br clear="none"/>
+            if(flowStatTable.get(matchedFlow) == null)<br clear="none"/>
+            {<br clear="none"/>
+                flowStatTable.put(matchedFlow, Collections.synchronizedSortedMap(new TreeMap&lt;Long, Double&gt;()));<br clear="none"/>
+            }<br clear="none"/>
+            flowStatTable.get(matchedFlow).put(checkPointTimeStamp, utilization);<br clear="none"/>
+            <br clear="none"/>
+            if (switchStatTable.get(new Long(sw.getId())) == null)<br clear="none"/>
+            {<br clear="none"/>
+                logger.debug(&quot;Adding a switch entry for the first time, swId = &quot; + sw.getId());<br clear="none"/>
+                LinkStatistics linkStat = new LinkStatistics();<br clear="none"/>
+                linkStat.setInputPort(matchedFlow.getInputPort());<br clear="none"/>
+                linkStat.addStatData(checkPointTimeStamp, utilization);<br clear="none"/><br clear="none"/>
+                SwitchStatistics swStat = new SwitchStatistics();<br clear="none"/>
+                swStat.setSwId(sw.getId());<br clear="none"/>
+                swStat.addLinkStat(linkStat);<br clear="none"/>
+                switchStatTable.put(sw.getId(), swStat);<br clear="none"/>
+            }<br clear="none"/>
+            else if (switchStatTable.get(new Long(sw.getId())).linkExists(match.getInputPort()) == false)<br clear="none"/>
+            {<br clear="none"/>
+                logger.debug(&quot;Adding entry for port = &quot; + matchedFlow.getInputPort() + &quot; on switch &quot; + sw.getId());<br clear="none"/>
+                LinkStatistics linkStat = new LinkStatistics();<br clear="none"/>
+                linkStat.setInputPort(matchedFlow.getInputPort());<br clear="none"/>
+                linkStat.addStatData(checkPointTimeStamp, utilization);<br clear="none"/>
+                switchStatTable.get(new Long(sw.getId())).addLinkStat(linkStat);<br clear="none"/>
+            }<br clear="none"/>
+            else<br clear="none"/>
+            {<br clear="none"/>
+                SwitchStatistics swStat = switchStatTable.get(new Long(sw.getId()));<br clear="none"/>
+                synchronized (swStat.getLinkStatTable())<br clear="none"/>
+                {<br clear="none"/>
+                    for (Iterator&lt;LinkStatistics&gt; lsIt = swStat.getLinkStatTable().iterator(); lsIt.hasNext();)<br clear="none"/>
+                    {<br clear="none"/>
+                        LinkStatistics ls = lsIt.next();<br clear="none"/>
+                        if (ls.getInputPort() == match.getInputPort())<br clear="none"/>
+                        {<br clear="none"/>
+                            Set&lt;Long&gt; timestampSet = ls.getStatData().keySet();<br clear="none"/>
+                            for (Iterator&lt;Long&gt; it = timestampSet.iterator(); it.hasNext();)<br clear="none"/>
+                            {<br clear="none"/>
+                                Long ts = it.next();<br clear="none"/>
+                                if (ts.longValue() &gt; matchedFlow.getTimestamp()<br clear="none"/>
+                                        &amp;&amp; ts.longValue() &lt;= checkPointTimeStamp)<br clear="none"/>
+                                {<br clear="none"/>
+                                    //logger.debug(&quot;[&quot; + matchedFlow.getTimestamp() + &quot;,&quot; + ts.toString() + &quot;,&quot; + checkPointTimeStamp + &quot;]&quot;);<br clear="none"/>
+                                    ls.getStatData().put(ts, utilization + ls.getStatData().get(ts).doubleValue());<br clear="none"/>
+                                }<br clear="none"/>
+                            }<br clear="none"/>
+                            ls.addStatData(checkPointTimeStamp, utilization);<br clear="none"/>
+                        }<br clear="none"/>
+                    }<br clear="none"/>
+                }<br clear="none"/>
+            }<br clear="none"/>
+            if (type.equals(OFType.STATS_REPLY))<br clear="none"/>
+            {<br clear="none"/>
+                matchedFlow.setTimestamp(checkPointTimeStamp);<br clear="none"/>
+            }<br clear="none"/>
+        }<br clear="none"/>
+    }<br clear="none"/><br clear="none"/></div><div><br clear="none"/></div><div><br clear="none"/></div><div><br clear="none"/></div><div><br clear="none"/></div></span>
+</div></body></html> 
